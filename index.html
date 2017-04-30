@@ -1,0 +1,106 @@
+<link rel="manifest" href="/manifest.json">
+
+<button class="push-button">enable push messages</button>
+<button class="test">test</button>
+
+<script>
+    const pushButton = document.querySelector(".push-button")
+    const testButton = document.querySelector(".test")
+    let isPushEnabled = false
+
+    pushButton.disabled = true
+
+    if (!("serviceWorker" in navigator && "PushManager" in window && 'showNotification' in ServiceWorkerRegistration.prototype)) {
+        throw "service worker not supported"
+    }
+
+
+    function subscribe() {
+        pushButton.disabled = true
+
+        navigator.serviceWorker.ready
+            .then(reg =>
+                reg.pushManager.subscribe({userVisibleOnly: true}).then(sub => {
+                    isPushEnabled = true
+                    pushButton.innerHTML = "disable push messages"
+                    pushButton.disabled = false
+
+                    console.log(sub)
+                }))
+            .catch(err => {
+                if (Notification.permission == "denied") {
+                    throw "push is denied"
+                }
+                else {
+                    throw err
+                }
+            })
+    }
+
+    function unsubscribe() {
+        pushButton.disabled = true
+
+        navigator.serviceWorker.ready
+            .then(reg =>
+                reg.pushManager.getSubscription().then(sub => {
+                    sub.unsubscribe().then(_ => {
+                        isPushEnabled = false
+                        pushButton.innerHTML = "enable push messages"
+                        pushButton.disabled = false
+                    })
+                }))
+            .catch(err => { 
+                pushButton.innerHTML = "enable push messages"
+                pushButton.disabled = false
+
+                throw err 
+            })
+    }
+
+    function initialiseState() {
+        if (Notification.permission == 'denied') return
+
+
+        navigator.serviceWorker.ready
+            .then(reg => {
+                console.log(reg.periodicSync)
+                pushButton.disabled = false
+
+                return reg.pushManager.getSubscription().then(sub => {
+                    if (!sub) return
+
+                    pushButton.innerHTML = "disable push messages"
+                    isPushEnabled = true
+                })
+            })
+            .catch(err => { throw err })
+    }
+
+    pushButton.addEventListener("click", evt => {
+        if (isPushEnabled) unsubscribe()
+        else subscribe()
+    })
+
+    testButton.addEventListener("click", evt => {
+        navigator.serviceWorker.ready.then(reg => {
+            reg.pushManager.getSubscription().then(sub => {
+                if (!sub) return
+
+                const registrationId = sub.endpoint.replace("https://android.googleapis.com/gcm/send/", "")
+
+                fetch("https://android.googleapis.com/gcm/send", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "Authorization": "key=AAAA1JOxv74:APA91bEDwpldu1hlz6-Qrk4wrxFyXHao7AzHIxiGjD_rI2yGVRDs9r7UhAlrlTJzmq6zogEfWUfRBKJ8zGQrMqBKMyDQhxrCMhoQnpBX0l2PqiOoqBn0RIS89t9-q3gRRnINwih_ysSN"
+                    },
+                    body: JSON.stringify({ "registration_ids": [registrationId] })
+                }).catch(err => { throw err })
+            })
+        })
+    })
+
+    navigator.serviceWorker.register("sw.js")
+        .then(initialiseState)
+        .catch(err => { throw err })
+</script>
